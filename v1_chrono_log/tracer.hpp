@@ -9,3 +9,16 @@
 #include <vector>
 
 namespace v1 {
+struct Tracer {
+  using clk = std::chrono::high_resolution_clock;
+  std::mutex m;
+  std::vector<std::pair<std::string, clk::time_point>> events;
+
+  void trace(const std::string& name) {
+    auto t = clk::now();
+    std::lock_guard<std::mutex> g(m);
+    events.emplace_back(name, t);
+  }
+  size_t size() const { return events.size(); }
+};
+}  // namespace v1
