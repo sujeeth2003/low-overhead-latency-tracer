@@ -12,3 +12,13 @@
 #include "../common/tsc.hpp"
 
 namespace v3 {
+struct Event { uint64_t tsc; uint32_t id; uint32_t thread; };
+
+constexpr size_t kPerThread = 1u << 20;  // events per thread (ring)
+
+struct ThreadBuf {
+  std::unique_ptr<Event[]> ev = std::make_unique<Event[]>(kPerThread);
+  size_t n = 0;
+  uint32_t thread_idx = 0;
+};
+
