@@ -22,3 +22,17 @@ struct ThreadBuf {
   uint32_t thread_idx = 0;
 };
 
+class Tracer {
+  std::mutex reg_m_;
+  std::vector<std::unique_ptr<ThreadBuf>> bufs_;
+
+  ThreadBuf* attach() {
+    std::lock_guard<std::mutex> g(reg_m_);
+    bufs_.push_back(std::make_unique<ThreadBuf>());
+    bufs_.back()->thread_idx = (uint32_t)bufs_.size() - 1;
+    return bufs_.back().get();
+  }
+
+  static uint64_t next_uid() { static std::atomic<uint64_t> n{0}; return ++n; }
+  const uint64_t uid_ = next_uid();
+
