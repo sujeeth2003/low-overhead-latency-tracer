@@ -36,3 +36,26 @@ class Tracer {
   static uint64_t next_uid() { static std::atomic<uint64_t> n{0}; return ++n; }
   const uint64_t uid_ = next_uid();
 
+ public:
+  inline void trace(uint32_t id) {
+    // Per-thread cache of "my buffer in tracer #owner". The owner check makes a
+    // thread that outlives one Tracer re-attach to the next one instead of
+    // writing through a dangling pointer. Assumes one active tracer per thread.
+    struct Cache { uint64_t owner = 0; ThreadBuf* tb = nullptr; };
+    static thread_local Cache c;
+    if (__builtin_expect(c.owner != uid_, 0)) { c.tb = attach(); c.owner = uid_; }
+    ThreadBuf* tb = c.tb;
+    tb->ev[tb->n++ & (kPerThread - 1)] = Event{rdtsc(), id, tb->thread_idx};
+  }
+  // Offline: merge all threads into one timeline. Call after tracing threads stop.
+  std::vector<Event> merge() const {
+    std::vector<Event> all;
+    for (auto& b : bufs_) {
+      size_t cnt = std::min(b->n, kPerThread), start = b->n < kPerThread ? 0 : b->n & (kPerThread - 1);
+      for (size_t i = 0; i < cnt; ++i) all.push_back(b->ev[(start + i) & (kPerThread - 1)]);
+    }
+    std::sort(all.begin(), all.end(), [](const Event& a, const Event& b) { return a.tsc < b.tsc; });
+    return all;
+  }
+};
+}  // namespace v3
