@@ -17,3 +17,15 @@
 #include <cstring>
 #include <ctime>
 
+#if defined(__linux__)
+#include <arpa/inet.h>
+#include <linux/errqueue.h>
+#include <linux/net_tstamp.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <algorithm>
+#include <vector>
+
+static double ts_ns(const timespec& t) { return t.tv_sec * 1e9 + t.tv_nsec; }
+static double realtime_ns() { timespec t; clock_gettime(CLOCK_REALTIME, &t); return ts_ns(t); }
+
