@@ -29,3 +29,35 @@
 static double ts_ns(const timespec& t) { return t.tv_sec * 1e9 + t.tv_nsec; }
 static double realtime_ns() { timespec t; clock_gettime(CLOCK_REALTIME, &t); return ts_ns(t); }
 
+int main(int argc, char** argv) {
+  int port = argc > 1 ? std::atoi(argv[1]) : 9999, count = argc > 2 ? std::atoi(argv[2]) : 1000;
+  int rx = socket(AF_INET, SOCK_DGRAM, 0), tx = socket(AF_INET, SOCK_DGRAM, 0);
+  sockaddr_in a{};
+  a.sin_family = AF_INET; a.sin_port = htons(port); a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  if (bind(rx, (sockaddr*)&a, sizeof a) < 0) { std::perror("bind"); return 1; }
+
+  int flags = SOF_TIMESTAMPING_RX_HARDWARE | SOF_TIMESTAMPING_RAW_HARDWARE |
+              SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_SOFTWARE;
+  if (setsockopt(rx, SOL_SOCKET, SO_TIMESTAMPING, &flags, sizeof flags) < 0) {
+    std::perror("SO_TIMESTAMPING"); return 1;
+  }
+  std::vector<double> stack_ns;
+  bool saw_hw = false;
+  for (int i = 0; i < count; ++i) {
+    char msg[16] = "ping";
+    sendto(tx, msg, sizeof msg, 0, (sockaddr*)&a, sizeof a);
+    char data[64], ctrl[256];
+    iovec iov{data, sizeof data};
+    msghdr mh{};
+    mh.msg_iov = &iov; mh.msg_iovlen = 1; mh.msg_control = ctrl; mh.msg_controllen = sizeof ctrl;
+    if (recvmsg(rx, &mh, 0) < 0) { std::perror("recvmsg"); return 1; }
+    double t_app = realtime_ns();
+    for (cmsghdr* c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c)) {
+      if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPING) {
+        timespec* ts = (timespec*)CMSG_DATA(c);  // [0]=software, [2]=raw hardware
+        double t_nic = ts_ns(ts[2]) > 0 ? ts_ns(ts[2]) : ts_ns(ts[0]);
+        if (ts_ns(ts[2]) > 0) saw_hw = true;
+        stack_ns.push_back(t_app - t_nic);
+      }
+    }
+  }
