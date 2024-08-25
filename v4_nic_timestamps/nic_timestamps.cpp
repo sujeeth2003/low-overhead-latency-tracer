@@ -61,3 +61,12 @@ int main(int argc, char** argv) {
       }
     }
   }
+  if (stack_ns.empty()) { std::puts("no timestamps returned by kernel"); return 1; }
+  std::sort(stack_ns.begin(), stack_ns.end());
+  auto at = [&](double q) { return stack_ns[(size_t)(q * (stack_ns.size() - 1))]; };
+  std::printf("source: %s\n", saw_hw ? "NIC hardware timestamp" : "kernel software timestamp (no HW ts available)");
+  std::printf("rx->app  p50=%.0f ns  p99=%.0f ns  max=%.0f ns  (n=%zu)\n", at(0.5), at(0.99), stack_ns.back(), stack_ns.size());
+}
+#else
+int main() { std::puts("v4 is Linux only (SO_TIMESTAMPING)."); }
+#endif
