@@ -14,3 +14,12 @@
 #include "../v2_ring_rdtsc/tracer.hpp"
 #include "../v3_thread_local/tracer.hpp"
 
+static double now_s() {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+// ~tens of ns of dependent integer work the tracer could disturb
+static inline uint64_t work(uint64_t x) {
+  for (int i = 0; i < 24; ++i) { x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; x ^= x >> 32; }
+  return x;
+}
+
