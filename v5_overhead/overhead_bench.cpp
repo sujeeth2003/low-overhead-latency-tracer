@@ -23,3 +23,17 @@ static inline uint64_t work(uint64_t x) {
   return x;
 }
 
+template <class F> double per_call_ns(size_t n, F&& f) {
+  double t0 = now_s();
+  for (size_t i = 0; i < n; ++i) f(i);
+  return (now_s() - t0) * 1e9 / (double)n;
+}
+template <class F> double workload_s(size_t n, F&& f) {
+  volatile uint64_t sink = 0;
+  uint64_t x = 1;
+  double t0 = now_s();
+  for (size_t i = 0; i < n; ++i) { f(0); x = work(x); f(1); }
+  sink = x; (void)sink;
+  return now_s() - t0;
+}
+
