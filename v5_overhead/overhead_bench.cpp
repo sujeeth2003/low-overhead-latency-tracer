@@ -37,3 +37,29 @@ template <class F> double workload_s(size_t n, F&& f) {
   return now_s() - t0;
 }
 
+int main(int argc, char** argv) {
+  size_t n = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 2'000'000;
+  std::puts("== part 1: cost per trace() call ==");
+  {
+    double base = per_call_ns(n, [](size_t i) { asm volatile("" ::"r"(i)); });
+    std::printf("empty loop            %7.2f ns\n", base);
+    v1::Tracer t1; size_t n1 = std::min<size_t>(n, 500'000);
+    std::printf("v1 chrono+mutex+str   %7.2f ns\n", per_call_ns(n1, [&](size_t) { t1.trace("order_received_from_gateway_handler"); }) - base);
+    v2::Tracer<> t2;
+    std::printf("v2 ring + rdtsc       %7.2f ns\n", per_call_ns(n, [&](size_t i) { t2.trace((uint32_t)i & 7); }) - base);
+    v3::Tracer t3;
+    std::printf("v3 thread_local ring  %7.2f ns\n", per_call_ns(n, [&](size_t i) { t3.trace((uint32_t)i & 7); }) - base);
+  }
+  std::puts("== part 2: perturbation of a fixed workload ==");
+  double off = workload_s(n, [](int) {});
+  std::printf("tracing off           %7.1f ns/iter\n", off * 1e9 / n);
+  {
+    v1::Tracer t; size_t n1 = std::min<size_t>(n, 500'000);
+    double s = workload_s(n1, [&](int k) { t.trace(k ? "iteration_end_marker_long_name" : "iteration_start_marker_long_name"); });
+    std::printf("v1 on                 %7.1f ns/iter  (+%.0f%%)\n", s * 1e9 / n1, (s / n1 / (off / n) - 1) * 100);
+  }
+  { v2::Tracer<> t; double s = workload_s(n, [&](int k) { t.trace(k); });
+    std::printf("v2 on                 %7.1f ns/iter  (+%.0f%%)\n", s * 1e9 / n, (s / off - 1) * 100); }
+  { v3::Tracer t; double s = workload_s(n, [&](int k) { t.trace(k); });
+    std::printf("v3 on                 %7.1f ns/iter  (+%.0f%%)\n", s * 1e9 / n, (s / off - 1) * 100); }
+}
