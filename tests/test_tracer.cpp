@@ -8,3 +8,22 @@
 static int failures = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++failures; } } while (0)
 
+int main() {
+  // v1 records in order
+  { v1::Tracer t; t.trace("a"); t.trace("b"); CHECK(t.size() == 2 && t.events[0].first == "a"); }
+
+  // v2: ids kept in order, timestamps monotonic, ring wraps correctly
+  { v2::Tracer<8> t; for (uint32_t i = 0; i < 20; ++i) t.trace(i);
+    auto s = t.snapshot();
+    CHECK(s.size() == 8 && s.front().id == 12 && s.back().id == 19);
+    for (size_t i = 1; i < s.size(); ++i) CHECK(s[i].tsc >= s[i - 1].tsc); }
+
+  // v3: 4 threads, merged timeline is sorted and complete
+  { v3::Tracer t;
+    std::vector<std::thread> th;
+    for (int k = 0; k < 4; ++k) th.emplace_back([&, k] { for (int i = 0; i < 1000; ++i) t.trace(k); });
+    for (auto& x : th) x.join();
+    auto m = t.merge();
+    CHECK(m.size() == 4000);
+    for (size_t i = 1; i < m.size(); ++i) CHECK(m[i].tsc >= m[i - 1].tsc); }
+
