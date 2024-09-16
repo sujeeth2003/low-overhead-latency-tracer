@@ -27,3 +27,18 @@ int main() {
     CHECK(m.size() == 4000);
     for (size_t i = 1; i < m.size(); ++i) CHECK(m[i].tsc >= m[i - 1].tsc); }
 
+  // v3: a second tracer created on the same thread after the first is destroyed
+  // (regression: cached thread_local pointer used to dangle)
+  { for (int round = 0; round < 3; ++round) { v3::Tracer t; t.trace(1); t.trace(2); CHECK(t.merge().size() == 2); } }
+
+  // calibration: 100 ms sleep should measure ~100 ms (allow generous scheduler slack)
+  { TscCal cal(50);
+    uint64_t a = rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    double ms = cal.delta_ns(a, rdtsc()) / 1e6;
+    std::printf("100 ms sleep measured as %.2f ms\n", ms);
+    CHECK(ms > 99 && ms < 130); }
+
+  std::puts(failures ? "FAILED" : "tracer tests ok");
+  return failures ? 1 : 0;
+}
