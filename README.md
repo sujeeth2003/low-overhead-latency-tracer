@@ -10,3 +10,20 @@ How do you time a 50 ns operation when the timer itself costs 100 ns? Five versi
 | [v4_nic_timestamps](v4_nic_timestamps/nic_timestamps.cpp) | `SO_TIMESTAMPING` NIC/kernel receive timestamp vs application timestamp isolates software-stack latency | n/a (Linux tool) |
 | [v5_overhead](v5_overhead/overhead_bench.cpp) | Measure tracer overhead itself: per-call cost and how much it slows a fixed workload; `perf`/VTune recipe | - |
 
+## Results
+11th-gen Core i5-1135G7, Windows 11, clang 21 `-O2`, 2M calls (v1: 500k). Single run, unpinned; re-run on your machine for numbers you will quote.
+
+```
+cost per trace() call        (empty-loop cost subtracted)
+  v1 chrono+mutex+str   141.2 ns
+  v2 ring + rdtsc         7.7 ns
+  v3 thread_local ring   10.5 ns
+
+fixed ~53 ns workload, two trace points per iteration
+  tracing off            53.0 ns/iter
+  v1 on                 305.6 ns/iter  (+476%)   <- the measurement dominates the thing measured
+  v2 on                  61.5 ns/iter  (+16%)
+  v3 on                  63.1 ns/iter  (+19%)
+```
+v3 is slightly *slower* than v2 per call here (an extra thread-local owner check) - its value is being correct and contention-free with many threads, not being faster on one.
+
