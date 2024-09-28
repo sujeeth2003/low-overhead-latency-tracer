@@ -27,3 +27,11 @@ fixed ~53 ns workload, two trace points per iteration
 ```
 v3 is slightly *slower* than v2 per call here (an extra thread-local owner check) - its value is being correct and contention-free with many threads, not being faster on one.
 
+## Design notes
+- **`rdtsc`, not `clock_gettime`.** No syscall or vDSO call; requires an invariant TSC. Calibrated once against `steady_clock` (`common/tsc.hpp`, error well under 0.1% with the default 50 ms window). `rdtsc` is not serializing: for measuring instruction-level latency add `lfence` or use `rdtscp`.
+- **Nothing on the hot path allocates, locks, or formats.** All formatting and name lookup happen offline.
+- **Ring buffer** overwrites the oldest events, so tracing can stay on in production and be dumped after an incident.
+- **v3** takes a mutex exactly once per thread (buffer registration). Assumes one active tracer per thread.
+- **v4** needs a NIC with hardware timestamping (`ethtool -T`); otherwise it reports kernel software timestamps and says so. NIC clocks are typically PTP-domain, so sync clocks or compare deltas. **Compiled for Linux but not run here (no Linux box); treat it as untested at runtime.**
+- The tracer's own measurement, especially for `perf stat` counters, is in `v5_overhead/perf_overhead.sh` (Linux) and was not run on this machine.
+
