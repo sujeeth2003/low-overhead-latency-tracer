@@ -35,3 +35,9 @@ v3 is slightly *slower* than v2 per call here (an extra thread-local owner check
 - **v4** needs a NIC with hardware timestamping (`ethtool -T`); otherwise it reports kernel software timestamps and says so. NIC clocks are typically PTP-domain, so sync clocks or compare deltas. **Compiled for Linux but not run here (no Linux box); treat it as untested at runtime.**
 - The tracer's own measurement, especially for `perf stat` counters, is in `v5_overhead/perf_overhead.sh` (Linux) and was not run on this machine.
 
+## Build
+```bash
+make test     # ordering, ring wrap, 4-thread merge, calibration, tracer re-creation regression
+make bench    # v5: per-call cost and perturbation
+make perf     # Linux + perf
+```
